@@ -25,11 +25,7 @@ app.use(cors({
   credentials: true
 }));
 
-// Option 3: Allow multiple origins
-const allowedOrigins = [
-  'https://vocal-mooncake-50fc69.netlify.app',
-  'http://localhost:3000' // for local development
-];
+
 
 app.use(cors({
   origin: function(origin, callback) {
