@@ -16,10 +16,35 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const cors = require('cors');
 
+const cors = require('cors');
+
+// Option 1: Allow all origins (development only)
+app.use(cors());
+
+// Option 2: Allow specific origin (production)
 app.use(cors({
-  origin: ['https://vocal-mooncake-50fc69.netlify.app', 'http://localhost:3000'],
+  origin: 'https://vocal-mooncake-50fc69.netlify.app',
   credentials: true
 }));
+
+// Option 3: Allow multiple origins
+const allowedOrigins = [
+  'https://vocal-mooncake-50fc69.netlify.app',
+  'http://localhost:3000' // for local development
+];
+
+app.use(cors({
+  origin: function(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
+
+
 // ============================================
 // IMPORT ROUTES (MVC Pattern - Routes Layer)
 // Each route file handles specific resource endpoints
