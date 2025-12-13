@@ -1,6 +1,6 @@
 // ============================================
 // COMP229 - Job Portal Application Server
-// Main server file implementing Express.js backend
+// FIXED VERSION (CORS + ES MODULE SAFE)
 // ============================================
 
 import express from 'express';
@@ -10,182 +10,130 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// ES6 modules don't have __dirname, so we create it manually
-// This is needed for serving static files and path resolution
+// --------------------------------------------
+// Path setup (ES Modules replacement for __dirname)
+// --------------------------------------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const cors = require('cors');
 
-// Option 1: Allow all origins (development only)
-app.use(cors());
-
-// Option 2: Allow specific origin (production)
-app.use(cors({
-  origin: 'https://vocal-mooncake-50fc69.netlify.app',
-  credentials: true
-}));
-
-
-
-app.use(cors({
-  origin: function(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true
-}));
-
-
-// ============================================
-// IMPORT ROUTES (MVC Pattern - Routes Layer)
-// Each route file handles specific resource endpoints
-// ============================================
-import authRoutes from './routes/authRoutes.js';        // Authentication & user management
-import jobRoutes from './routes/jobRoutes.js';          // Job posting CRUD operations
-import userRoutes from './routes/userRoutes.js';        // User profile operations
-import applicationRoutes from './routes/applicationRoutes.js'; // Job application management
-
-// Load environment variables from backend/.env
-// This keeps sensitive data (DB credentials, JWT secrets) out of code
+// --------------------------------------------
+// Load environment variables
+// --------------------------------------------
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
+// --------------------------------------------
+// App initialization (MUST come before middleware)
+// --------------------------------------------
 const app = express();
-const PORT = process.env.PORT || 5000; // Default to 5000 if not specified in .env
+const PORT = process.env.PORT || 5000;
 
-// ============================================
-// MIDDLEWARE CONFIGURATION
-// Middleware functions execute in order for every request
-// ============================================
+// --------------------------------------------
+// CORS CONFIG (THIS IS THE IMPORTANT PART)
+// --------------------------------------------
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://vocal-mooncake-50fc69.netlify.app'
+];
 
-// CORS (Cross-Origin Resource Sharing)
-// Allows frontend (React on port 5173) to communicate with backend (Express on port 5000)
-const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
-  .split(',')
-  .map(origin => origin.trim())
-  .filter(Boolean);
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // allow server-to-server & health checks
+      if (!origin) return callback(null, true);
 
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true); // Allow server-to-server and health checks
-    if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    return callback(new Error('Not allowed by CORS'));
-  },
-  credentials: true // Allow cookies and authorization headers
-}));
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
 
-// Body Parser Middleware
-// Parse incoming JSON payloads (req.body) for POST/PUT requests
+      return callback(new Error(`CORS blocked: ${origin}`));
+    },
+    credentials: true
+  })
+);
+
+// --------------------------------------------
+// Body parsers
+// --------------------------------------------
 app.use(express.json());
-
-// Parse URL-encoded form data (application/x-www-form-urlencoded)
 app.use(express.urlencoded({ extended: true }));
 
-// Custom Request Logger Middleware
-// Logs every incoming request for debugging purposes
-// Helps track which endpoints are being called
+// --------------------------------------------
+// Request logger
+// --------------------------------------------
 app.use((req, res, next) => {
   console.log(`[REQ] ${req.method} ${req.originalUrl}`);
-  next(); // Pass control to next middleware
+  next();
 });
 
+// --------------------------------------------
 // Static files
+// --------------------------------------------
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
-// ============================================
-// DATABASE CONNECTION FUNCTION
-// Connects to MongoDB Atlas using Mongoose ODM
-// ============================================
-const connectDB = async () => {
-  const uri = process.env.MONGODB_URI;
-  if (!uri || uri.trim().length === 0) {
-    console.error('[DB] MONGODB_URI is missing. Create .env with MONGODB_URI.');
-    console.error('[DB] Example: mongodb+srv://<user>:<pass>@<cluster>/<db>?retryWrites=true&w=majority');
-    process.exit(1);
-    return;
-  }
+// --------------------------------------------
+// Routes
+// --------------------------------------------
+import authRoutes from './routes/authRoutes.js';
+import jobRoutes from './routes/jobRoutes.js';
+import userRoutes from './routes/userRoutes.js';
+import applicationRoutes from './routes/applicationRoutes.js';
 
-  console.log(`[DB] Attempting MongoDB connection...`);
-  console.log(`[DB] Target URI present: ${uri.startsWith('mongodb') ? 'Yes' : 'No'}`);
+app.use('/api/auth', authRoutes);
+app.use('/api/jobs', jobRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/applications', applicationRoutes);
 
-  try {
-    const conn = await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 10000,
-      heartbeatFrequencyMS: 10000,
-    });
-    console.log(`[DB] MongoDB Connected to host: ${conn.connection.host}`);
-  } catch (error) {
-    console.error('[DB] Database connection error:');
-    // Print common diagnostics to help identify Atlas issues quickly
-    console.error(`- Name: ${error.name}`);
-    console.error(`- Message: ${error.message}`);
-    if (error.reason && error.reason.type) {
-      console.error(`- Topology Type: ${error.reason.type}`);
-    }
-    console.error('- Tips:');
-    console.error('  1) Verify IP is whitelisted in Atlas (Network Access).');
-    console.error('  2) Confirm username/password and database name in URI.');
-    console.error('  3) Ensure SRV URI starts with mongodb+srv and uses correct cluster.');
-    console.error('  4) Check that your cluster is running and not paused.');
-    process.exit(1);
-  }
-};
-
-// ============================================
-// ROUTE MOUNTING (MVC Pattern - Routes Layer)
-// Mount route handlers at specific base paths
-// All routes are prefixed with /api for API versioning
-// ============================================
-app.use('/api/auth', authRoutes);           // Authentication endpoints: /api/auth/register, /api/auth/login
-app.use('/api/jobs', jobRoutes);            // Job CRUD endpoints: /api/jobs, /api/jobs/:id
-app.use('/api/users', userRoutes);          // User management: /api/users, /api/users/:id
-app.use('/api/applications', applicationRoutes); // Application endpoints: /api/applications
-
-// ============================================
-// HEALTH CHECK ENDPOINT
-// Simple endpoint to verify server is running
-// Useful for monitoring and deployment verification
-// ============================================
+// --------------------------------------------
+// Health check
+// --------------------------------------------
 app.get('/api/health', (req, res) => {
-  res.json({ 
-    message: 'Job Portal API is running!', 
-    timestamp: new Date().toISOString() 
+  res.json({
+    message: 'Job Portal API is running',
+    time: new Date().toISOString()
   });
 });
 
-// ============================================
-// ERROR HANDLING MIDDLEWARE
-// Must be defined AFTER all routes
-// Catches any errors thrown in route handlers
-// ============================================
+// --------------------------------------------
+// Error handler
+// --------------------------------------------
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ 
-    message: 'Something went wrong!', 
-    // Hide detailed error messages in production for security
-    error: process.env.NODE_ENV === 'production' ? 'Internal Server Error' : err.message 
+  res.status(500).json({
+    message: 'Server error',
+    error: process.env.NODE_ENV === 'production'
+      ? 'Internal Server Error'
+      : err.message
   });
 });
 
-// ============================================
-// 404 NOT FOUND HANDLER
-// Catches all undefined routes
-// Must be the LAST route handler
-// ============================================
+// --------------------------------------------
+// 404 handler
+// --------------------------------------------
 app.use('*', (req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
 
-// Start server
+// --------------------------------------------
+// Database + server start
+// --------------------------------------------
+const connectDB = async () => {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    console.error('MONGODB_URI missing');
+    process.exit(1);
+  }
+
+  await mongoose.connect(uri, {
+    serverSelectionTimeoutMS: 10000
+  });
+
+  console.log('MongoDB connected');
+};
+
 const startServer = async () => {
   await connectDB();
   app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-    console.log(`Health check: http://localhost:${PORT}/api/health`);
+    console.log(`Server running on port ${PORT}`);
   });
 };
 
