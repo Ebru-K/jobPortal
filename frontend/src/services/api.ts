@@ -2,7 +2,7 @@ import axios from 'axios';
 
 const baseUrl =
   (typeof import.meta !== 'undefined' && (import.meta as any)?.env?.VITE_API_BASE_URL) ||
-  'http://localhost:5000/api';
+  'https://jobportal-kj7k.onrender.com/api';
 
 // Create axios instance with base configuration
 export const api = axios.create({
