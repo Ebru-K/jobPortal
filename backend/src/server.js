@@ -16,8 +16,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const cors = require('cors');
 
-const cors = require('cors');
-
 // Option 1: Allow all origins (development only)
 app.use(cors());
 
