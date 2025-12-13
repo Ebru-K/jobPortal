@@ -14,7 +14,12 @@ import { fileURLToPath } from 'url';
 // This is needed for serving static files and path resolution
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const cors = require('cors');
 
+app.use(cors({
+  origin: ['https://vocal-mooncake-50fc69.netlify.app', 'http://localhost:3000'],
+  credentials: true
+}));
 // ============================================
 // IMPORT ROUTES (MVC Pattern - Routes Layer)
 // Each route file handles specific resource endpoints
